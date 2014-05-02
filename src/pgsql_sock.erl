@@ -507,13 +507,13 @@ initializing({?READY_FOR_QUERY, <<Status:8>>}, State) ->
     erase(username),
     erase(password),
     %% TODO decode dates to now() format
-    case lists:keysearch(<<"integer_datetimes">>, 1, Parameters) of
-        {value, {_, <<"on">>}}  -> put(datetime_mod, pgsql_idatetime);
-        {value, {_, <<"off">>}} -> put(datetime_mod, pgsql_fdatetime)
-    end,
+    DateTimeMod = case lists:keysearch(<<"integer_datetimes">>, 1, Parameters) of
+                      {value, {_, <<"on">>}}  -> pgsql_idatetime;
+                      {value, {_, <<"off">>}} -> pgsql_fdatetime
+                  end,
     State2 = finish(State#state{handler = on_message,
                                txstatus = Status,
-                               codec = pgsql_binary:new_codec([])},
+                               codec = pgsql_binary:new_codec(DateTimeMod)},
                    connected),
     {noreply, State2};
 

@@ -9,14 +9,13 @@
 
 -record(codec, {
     type2oid = [],
-    oid2type = []
+    oid2type = [],
+    datetime_mod
 }).
 
 -include("pgsql_binary.hrl").
 
--define(datetime, (get(datetime_mod))).
-
-new_codec([]) -> #codec{}.
+new_codec(DateTimeMod) -> #codec{datetime_mod = DateTimeMod}.
 
 update_type_cache(TypeInfos, Codec) ->
     Type2Oid = lists:flatmap(
@@ -52,12 +51,12 @@ encode(float4, N, _)                        -> <<4:?int32, N:1/big-float-unit:32
 encode(float8, N, _)                        -> <<8:?int32, N:1/big-float-unit:64>>;
 encode(bpchar, C, _) when is_integer(C)     -> <<1:?int32, C:1/big-unsigned-unit:8>>;
 encode(bpchar, B, _) when is_binary(B)      -> <<(byte_size(B)):?int32, B/binary>>;
-encode(time = Type, B, _)                   -> ?datetime:encode(Type, B);
-encode(timetz = Type, B, _)                 -> ?datetime:encode(Type, B);
-encode(date = Type, B, _)                   -> ?datetime:encode(Type, B);
-encode(timestamp = Type, B, _)              -> ?datetime:encode(Type, B);
-encode(timestamptz = Type, B, _)            -> ?datetime:encode(Type, B);
-encode(interval = Type, B, _)               -> ?datetime:encode(Type, B);
+encode(time = Type, B, Codec)               -> encode_datetime(Type, B, Codec);
+encode(timetz = Type, B, Codec)             -> encode_datetime(Type, B, Codec);
+encode(date = Type, B, Codec)               -> encode_datetime(Type, B, Codec);
+encode(timestamp = Type, B, Codec)          -> encode_datetime(Type, B, Codec);
+encode(timestamptz = Type, B, Codec)        -> encode_datetime(Type, B, Codec);
+encode(interval = Type, B, Codec)           -> encode_datetime(Type, B, Codec);
 encode(bytea, B, _) when is_binary(B)       -> <<(byte_size(B)):?int32, B/binary>>;
 encode(text, B, _) when is_binary(B)        -> <<(byte_size(B)):?int32, B/binary>>;
 encode(varchar, B, _) when is_binary(B)     -> <<(byte_size(B)):?int32, B/binary>>;
@@ -77,16 +76,22 @@ decode(int8, <<N:1/big-signed-unit:64>>, _)    -> N;
 decode(float4, <<N:1/big-float-unit:32>>, _)   -> N;
 decode(float8, <<N:1/big-float-unit:64>>, _)   -> N;
 decode(record, <<_:?int32, Rest/binary>>, Codec) -> list_to_tuple(decode_record(Rest, [], Codec));
-decode(time = Type, B, _)                      -> ?datetime:decode(Type, B);
-decode(timetz = Type, B, _)                    -> ?datetime:decode(Type, B);
-decode(date = Type, B, _)                      -> ?datetime:decode(Type, B);
-decode(timestamp = Type, B, _)                 -> ?datetime:decode(Type, B);
-decode(timestamptz = Type, B, _)               -> ?datetime:decode(Type, B);
-decode(interval = Type, B, _)                  -> ?datetime:decode(Type, B);
+decode(time = Type, B, Codec)                  -> decode_datetime(Type, B, Codec);
+decode(timetz = Type, B, Codec)                -> decode_datetime(Type, B, Codec);
+decode(date = Type, B, Codec)                  -> decode_datetime(Type, B, Codec);
+decode(timestamp = Type, B, Codec)             -> decode_datetime(Type, B, Codec);
+decode(timestamptz = Type, B, Codec)           -> decode_datetime(Type, B, Codec);
+decode(interval = Type, B, Codec)              -> decode_datetime(Type, B, Codec);
 decode(uuid, B, _)                             -> decode_uuid(B);
 decode(hstore, Hstore, _)                      -> decode_hstore(Hstore);
 decode({array, _Type}, B, Codec)               -> decode_array(B, Codec);
 decode(_Other, Bin, _)                         -> Bin.
+
+encode_datetime(Type, B, #codec{datetime_mod = DateTimeMod}) ->
+    DateTimeMod:encode(Type, B).
+
+decode_datetime(Type, B, #codec{datetime_mod = DateTimeMod}) ->
+    DateTimeMod:decode(Type, B).
 
 encode_array(Type, Oid, A, Codec) ->
     {Data, {NDims, Lengths}} = encode_array(Type, A, 0, [], Codec),
